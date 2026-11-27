@@ -1,0 +1,15 @@
+# Offline interactive realtime transport fixture
+
+This disposable probe models a shared framing contract for `reverb`, `self-hosted`, `ably`, `pusher`, and `apinator`, listed in priority order. All five keys select the same in-memory fixture, not provider adapters. `reverb` identifies an existing Laravel Reverb deployment; `self-hosted` is the panel's built-in relay and remains the no-config default. The in-memory fixture opens no sockets, uses no provider SDK or credentials, and must not ship as production code.
+
+```sh
+node --test tools/feasibility/realtime/fixture.test.mjs
+```
+
+`fixture.mjs` accepts a selected provider, opaque route, epoch, and deterministic monotonic clock. Browser/agent grant objects are scoped to that fixture and permit publishing and receiving only in the respective directions. They are local capability objects, not a model of a provider's real authorization or revocation semantics. `takeOutbound` and `inject` model an untrusted relay: the driver can drop, duplicate, reorder, or replace frames. A fresh fixture has no old queues or grants. The receiver drops old-route/epoch traffic. A detected gap that times out, an invalid frame, an excessive position jump, or a receive overflow closes the entire duplex session, dropping all remaining data in both directions. Duplicates never advance the cursor. `published` means queued locally, not delivered to an authenticated peer. `queue-full` and `rate-limited` reject only the current write, without consuming a position. `read` and `takeOutbound` distinguish `data` (with bytes), `empty`, and `closed` (with reason); unauthorized reads return `forbidden`. The grant lifetime defaults to 60 seconds; expiration closes the fixture.
+
+Fixture-only limits: 512 bytes per UTF-8 JSON/base64 envelope, 4 frames and 1,536 encoded bytes across held outbound, reorder, and unread delivery queues, five publishes per rolling second per fixture, three positions of reorder distance, and 5,000 ms for a detected gap. The driver owns frames pulled via `takeOutbound`; external relay storage is outside the queue measurement. Gap expiration requires observing a later frame and is checked on fixture calls or explicit clock ticks; this is not an implementation of peer liveness. The size/rate figures are test values, not vendor limits or deployment defaults.
+
+A test uses Node's AES-GCM with synthetic inputs at the endpoints and checks that the wire contains ciphertext, without the plaintext marker or key. This illustrates blind forwarding only; it does not prove E2EE establishment, channel auth, tenant isolation, authenticated continuity, an actual vendor's limits, browser compatibility, or reconnect performance. It is not evidence for SSH, bulk transfer, or Web Push.
+
+For actual WebSocket connections within isolated local containers, see the separate [self-hosted Node and workerd probe](self-hosted/README.md).
